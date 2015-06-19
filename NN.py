@@ -25,12 +25,11 @@ class NN:
 		x, t = Variable(x_data), Variable(y_data)
 		h1 = F.dropout(F.sigmoid(self.model.l1(x)), train=train)
 		h2 = F.dropout(F.sigmoid(self.model.l2(h1)), train=train)
-		# このyはまだソフトマックス通る前？
 		y = self.model.l3(h2)
-		return F.mean_squared_error(y, t), F.accuracy(y,t)
+		return F.softmax_cross_entropy(y, t), F.accuracy(y,t)
 
 
-	def train_and_test(self, n_epoch=20, batchsize = 1):
+	def train_and_test(self, n_epoch=20, batchsize = 100):
 		for epoch in xrange(1, n_epoch+1):
 			print 'epoch', epoch
 
