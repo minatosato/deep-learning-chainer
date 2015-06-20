@@ -36,6 +36,11 @@ class DenoisingAutoEncoder:
 		loss = F.mean_squared_error(y, t)
 		return loss
 
+	def compute_hidden(self, x_data):
+		x = Variable(x_data)
+		h = self.encode(x)
+		return h.data
+
 	def predict(self, x_data):
 		x = Variable(x_data)
 		# encode
@@ -82,7 +87,7 @@ class DenoisingAutoEncoder:
 
 			print 'train mean loss={}'.format(sum_loss/N)
 
-			# evalation
+			# evaluation
 			sum_loss = 0
 			for i in xrange(0, N_test, batchsize):
 				x_batch = self.x_test[i:i+batchsize]
@@ -127,24 +132,12 @@ if __name__ == '__main__':
 	perm = np.random.permutation(N)
 	data = mnist.data[perm[0:9]]
 
-	draw_digits(data, fname="epoch0.png")
+	draw_digits(data, fname="_epoch0.png")
 
-	dAE.train_and_test(n_epoch=1)
+	dAE.train_and_test(n_epoch=5)
 
-	draw_digits(dAE.predict(data), fname="epoch1.png")
+	draw_digits(dAE.predict(data), fname="_epoch5.png")
 
-	dAE.train_and_test(n_epoch=1)
-
-	draw_digits(dAE.predict(data), fname="epoch2.png")
-
-	dAE.train_and_test(n_epoch=1)
-
-	draw_digits(dAE.predict(data), fname="epoch3.png")
-
-	dAE.train_and_test(n_epoch=1)
-
-	draw_digits(dAE.predict(data), fname="epoch4.png")
-
-	dAE.train_and_test(n_epoch=1)
-
-	draw_digits(dAE.predict(data), fname="epoch5.png")
+	perm = np.random.permutation(784)
+	W = dAE.model.encoder.W[perm[0:9]]
+	draw_digits(W, fname="learned_weights.png")
