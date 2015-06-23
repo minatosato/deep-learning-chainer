@@ -11,11 +11,10 @@ N_test = 10000
 
 
 class NN:
-	def __init__(self, data, target, n_inputs=784, n_hidden=1000, n_outputs=10):
+	def __init__(self, data, target, n_inputs=784, n_hidden=784, n_outputs=10):
 
 		self.model = FunctionSet(l1=F.Linear(n_inputs, n_hidden),
-								 l2=F.Linear(n_hidden, n_hidden),
-								 l3=F.Linear(n_hidden, n_outputs))
+								 l2=F.Linear(n_hidden, n_outputs))
 		self.x_train, self.x_test = np.split(data,   [N])
 		self.y_train, self.y_test = np.split(target, [N])
 		self.optimizer = optimizers.Adam()
@@ -23,9 +22,8 @@ class NN:
 
 	def forward(self, x_data, y_data, train=True):
 		x, t = Variable(x_data), Variable(y_data)
-		h1 = F.dropout(F.sigmoid(self.model.l1(x)), train=train)
-		h2 = F.dropout(F.sigmoid(self.model.l2(h1)), train=train)
-		y = self.model.l3(h2)
+		h = F.dropout(F.sigmoid(self.model.l1(x)), train=train)
+		y = self.model.l2(h)
 		return F.softmax_cross_entropy(y, t), F.accuracy(y,t)
 
 

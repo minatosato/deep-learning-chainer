@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+import sys
+from copy import *
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.datasets import fetch_mldata
@@ -12,20 +15,36 @@ N_test = 10000
 
 
 class DenoisingAutoEncoder:
-	def __init__(self, data, n_inputs=784, n_hidden=784, noise=0.1):
+	def __init__(self, rng, data, n_inputs=784, n_hidden=784, corruption_level=0.3, gpu=-1):
+		"""DenoisingAutoEncoder初期化
+		data: data for train
+		n_inputs: a number of units of input layer and output layer
+		n_hidden: a number of units of hidden layer
+		corruption_level: a ratio of masking noise
+		"""
 
 		self.model = FunctionSet(encoder=F.Linear(n_inputs, n_hidden),
 								 decoder=F.Linear(n_hidden, n_inputs))
+
+		if gpu >= 0:
+			cuda.init(gpu)
+			self.model.to_gpu()
+
+		self.gpu = gpu
 		self.x_train, self.x_test = np.split(data, [N])
 		self.optimizer = optimizers.Adam()
 		self.optimizer.setup(self.model.collect_parameters())
-		self.noise = noise
-		self.rng = np.random.RandomState(1)
+		self.corruption_level = corruption_level
+		self.rng = rng
 
 	def forward(self, x_data, train=True):
 		y_data = x_data
 		# add noise (masking noise)
-		x_data = self.add_noise(x_data, train=train)
+		x_data = self.get_corrupted_inputs(x_data, train=train)
+
+		if self.gpu >= 0:
+			x_data = cuda.to_gpu(x_data)
+			y_data = cuda.to_gpu(y_data)
 
 		x, t = Variable(x_data), Variable(y_data)
 		# encode
@@ -37,17 +56,22 @@ class DenoisingAutoEncoder:
 		return loss
 
 	def compute_hidden(self, x_data):
+		if self.gpu >= 0:
+			x_data = cuda.to_gpu(x_data)
 		x = Variable(x_data)
 		h = self.encode(x)
-		return h.data
+		return cuda.to_cpu(h.data)
 
 	def predict(self, x_data):
+		if self.gpu >= 0:
+			x_data = cuda.to_gpu(x_data)
+
 		x = Variable(x_data)
 		# encode
 		h = self.encode(x)
 		# decode
 		y = self.decode(h)
-		return y.data
+		return cuda.to_cpu(y.data)
 
 	def encode(self, x):
 		return F.sigmoid(self.model.encoder(x))
@@ -62,14 +86,15 @@ class DenoisingAutoEncoder:
 		return self.model.decoder
 
 	# masking noise
-	def add_noise(self, x_data, train=True):
+	def get_corrupted_inputs(self, x_data, train=True):
 		if train:
-			return self.rng.binomial(size=x_data.shape, n=1, p=1.0-self.noise) * x_data
+			ret = self.rng.binomial(size=x_data.shape, n=1, p=1.0-self.corruption_level) * x_data
+			return ret.astype(np.float32)
 		else:
 			return x_data
 
 
-	def train_and_test(self, n_epoch=5, batchsize = 100):
+	def train_and_test(self, n_epoch=5, batchsize=100):
 		for epoch in xrange(1, n_epoch+1):
 			print 'epoch', epoch
 
@@ -125,19 +150,33 @@ if __name__ == '__main__':
 	mnist.data   = mnist.data.astype(np.float32)
 	mnist.data  /= 255
 	mnist.target = mnist.target.astype(np.int32)
-	# draw_digits(mnist.data[0:9])
 
-	dAE = DenoisingAutoEncoder(data=mnist.data)
+
+
+
+	parser = argparse.ArgumentParser(description='MNIST')
+	parser.add_argument('--gpu', '-g', default=-1, type=int,
+						help='GPU ID (negative value indicates CPU)')
+	args = parser.parse_args()
+	gpu = args.gpu
+
+
+
+	# draw_digits(mnist.data[0:9])
+	rng = np.random.RandomState(1)
+
+	dAE = DenoisingAutoEncoder(rng=rng,data=mnist.data, gpu=gpu)
 
 	perm = np.random.permutation(N)
 	data = mnist.data[perm[0:9]]
 
-	draw_digits(data, fname="_epoch0.png")
+	draw_digits(data, fname=str(gpu)+"_epoch0.png")
 
 	dAE.train_and_test(n_epoch=5)
 
-	draw_digits(dAE.predict(data), fname="_epoch5.png")
+	predicted = dAE.predict(data)
+	draw_digits(predicted, fname=str(gpu)+"_epoch5.png")
 
 	perm = np.random.permutation(784)
-	W = dAE.model.encoder.W[perm[0:9]]
-	draw_digits(W, fname="learned_weights.png")
+	W = dAE.model.to_cpu().encoder.W[perm[0:9]]
+	draw_digits(W, fname=str(gpu)+"learned_weights.png")
