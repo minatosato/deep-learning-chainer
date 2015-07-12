@@ -3,10 +3,12 @@
 import sys
 from copy import *
 import argparse
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.datasets import fetch_mldata
 from chainer import cuda, Variable, FunctionSet, optimizers
+import chainer.computational_graph as c
 import chainer.functions as F
 
 
@@ -16,7 +18,7 @@ N_test = 10000
 
 class DenoisingAutoEncoder:
 	def __init__(self, rng, data, n_inputs=784, n_hidden=784, corruption_level=0.3, gpu=-1):
-		"""DenoisingAutoEncoder初期化
+		"""DenoisingAutoEncoder
 		data: data for train
 		n_inputs: a number of units of input layer and output layer
 		n_hidden: a number of units of hidden layer
@@ -27,7 +29,6 @@ class DenoisingAutoEncoder:
 								 decoder=F.Linear(n_hidden, n_inputs))
 
 		if gpu >= 0:
-			cuda.init(gpu)
 			self.model.to_gpu()
 
 		self.gpu = gpu
@@ -160,10 +161,21 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 	gpu = args.gpu
 
-
+	if gpu >= 0:
+		cuda.init(gpu)
 
 	# draw_digits(mnist.data[0:9])
 	rng = np.random.RandomState(1)
+
+
+
+
+
+	start_time = time.time()
+
+
+
+
 
 	dAE = DenoisingAutoEncoder(rng=rng,data=mnist.data, gpu=gpu)
 
@@ -180,3 +192,10 @@ if __name__ == '__main__':
 	perm = np.random.permutation(784)
 	W = dAE.model.to_cpu().encoder.W[perm[0:9]]
 	draw_digits(W, fname=str(gpu)+"learned_weights.png")
+
+
+
+
+	end_time = time.time()
+
+	print "time = {}".format(end_time-start_time)
