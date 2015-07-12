@@ -53,24 +53,33 @@ class SdAE:
 										 n_hidden=self.n_hidden[0],
 										 gpu=self.gpu)
 		# train first dAE
+		print "First dAE training has started!"
 		self.dae1.train_and_test(n_epoch=n_epoch, batchsize=100)
 		# compute second iputs for second dAE
 		second_inputs = self.dae1.compute_hidden(first_inputs)
+
+
+
 		# initialize second dAE
 		self.dae2 = DenoisingAutoEncoder(self.rng, second_inputs,
 										 n_inputs=self.n_hidden[0],
 										 n_hidden=self.n_hidden[1],
 										 gpu=self.gpu)
 		# train second dAE
+		print "Second dAE training has started!"
 		self.dae2.train_and_test(n_epoch=n_epoch, batchsize=100)
 		# compute third inputs for third dAE
 		third_inputs = self.dae2.compute_hidden(second_inputs)
 		# initialize third dAE
+
+
+
 		self.dae3 = DenoisingAutoEncoder(self.rng, third_inputs,
 										 n_inputs=self.n_hidden[1],
 										 n_hidden=self.n_hidden[2],
 										 gpu=self.gpu)
 		# train third dAE
+		print "Third dAE training has started!"
 		self.dae3.train_and_test(n_epoch=n_epoch, batchsize=100)
 
 		# update model parameters
@@ -152,5 +161,3 @@ if __name__ == '__main__':
 	SDA = SdAE(rng=rng, data=mnist.data, target=mnist.target, n_hidden=n_hidden, gpu=args.gpu)
 	SDA.pre_train(n_epoch=10)
 	SDA.fine_tune(n_epoch=20)
-
-	sys.exit()

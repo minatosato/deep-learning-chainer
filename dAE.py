@@ -183,16 +183,16 @@ if __name__ == '__main__':
 	perm = np.random.permutation(N)
 	data = mnist.data[perm[0:9]]
 
-	draw_digits(data, fname=str(gpu)+"_epoch0.png")
+	draw_digits(data, fname="input.png")
 
 	dAE.train_and_test(n_epoch=5)
 
 	predicted = dAE.predict(data)
-	draw_digits(predicted, fname=str(gpu)+"_epoch5.png")
+	draw_digits(predicted, fname="output_epoch5.png")
 
 	perm = np.random.permutation(784)
 	W = dAE.model.to_cpu().encoder.W[perm[0:9]]
-	draw_digits(W, fname=str(gpu)+"learned_weights.png")
+	draw_digits(W, fname="learned_weights.png")
 
 
 
