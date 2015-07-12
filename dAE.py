@@ -124,6 +124,7 @@ class DenoisingAutoEncoder:
 
 			print 'test mean loss={}'.format(sum_loss/N_test)
 
+# 参考: http://qiita.com/kenmatsu4/items/7b8d24d4c5144a686412
 def draw_digit(data):
     size = 28
     X, Y = np.meshgrid(range(size),range(size))
