@@ -75,10 +75,10 @@ class DenoisingAutoEncoder:
 		return cuda.to_cpu(y.data)
 
 	def encode(self, x):
-		return F.sigmoid(self.model.encoder(x))
+		return F.relu(self.model.encoder(x))
 
 	def decode(self, h):
-		return F.sigmoid(self.model.decoder(h))
+		return F.relu(self.model.decoder(h))
 
 	def encoder(self):
 		return self.model.encoder
@@ -199,4 +199,4 @@ if __name__ == '__main__':
 
 	end_time = time.time()
 
-	print "time = {}".format(end_time-start_time)
+	print "time = {} min".format((end_time-start_time)/60.0)

@@ -2,6 +2,7 @@
 
 import sys
 import argparse
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.datasets import fetch_mldata
@@ -90,10 +91,15 @@ class SdAE:
 		self.setup_optimizer()
 
 	def forward(self, x_data, y_data, train=True):
+		
+		if self.gpu >= 0:
+			x_data = cuda.to_gpu(x_data)
+			y_data = cuda.to_gpu(y_data)
+
 		x, t = Variable(x_data), Variable(y_data)
-		h1 = F.dropout(F.sigmoid(self.model.l1(x)), train=train)
-		h2 = F.dropout(F.sigmoid(self.model.l2(h1)), train=train)
-		h3 = F.dropout(F.sigmoid(self.model.l3(h2)), train=train)
+		h1 = F.dropout(F.relu(self.model.l1(x)), train=train)
+		h2 = F.dropout(F.relu(self.model.l2(h1)), train=train)
+		h3 = F.dropout(F.relu(self.model.l3(h2)), train=train)
 		y = self.model.l4(h3)
 		return F.softmax_cross_entropy(y, t), F.accuracy(y, t)
 
@@ -157,7 +163,19 @@ if __name__ == '__main__':
 	if args.gpu >= 0:
 		cuda.init(args.gpu)
 
-	n_hidden = [784,500,200]
-	SDA = SdAE(rng=rng, data=mnist.data, target=mnist.target, n_hidden=n_hidden, gpu=args.gpu)
+	start_time = time.time()
+
+	SDA = SdAE(rng=rng, data=mnist.data, target=mnist.target, gpu=args.gpu)
 	SDA.pre_train(n_epoch=10)
 	SDA.fine_tune(n_epoch=20)
+
+	end_time = time.time()
+
+	print "time = {} min".format((end_time-start_time)/60.0)
+
+
+
+
+
+
+

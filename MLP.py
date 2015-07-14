@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+import argparse
+import time
 import numpy as np
 from sklearn.datasets import fetch_mldata
 from chainer import cuda, Variable, FunctionSet, optimizers
@@ -10,17 +12,27 @@ N = 60000
 N_test = 10000
 
 
-class NN:
-	def __init__(self, data, target, n_inputs=784, n_hidden=784, n_outputs=10):
+class MLP:
+	def __init__(self, data, target, n_inputs=784, n_hidden=784, n_outputs=10, gpu=-1):
 
 		self.model = FunctionSet(l1=F.Linear(n_inputs, n_hidden),
 								 l2=F.Linear(n_hidden, n_outputs))
+
+		if gpu >= 0:
+			self.model.to_gpu()
+
+		self.gpu = gpu
 		self.x_train, self.x_test = np.split(data,   [N])
 		self.y_train, self.y_test = np.split(target, [N])
 		self.optimizer = optimizers.Adam()
 		self.optimizer.setup(self.model.collect_parameters())
 
 	def forward(self, x_data, y_data, train=True):
+
+		if self.gpu >= 0:
+			x_data = cuda.to_gpu(x_data)
+			y_data = cuda.to_gpu(y_data)
+
 		x, t = Variable(x_data), Variable(y_data)
 		h = F.dropout(F.sigmoid(self.model.l1(x)), train=train)
 		y = self.model.l2(h)
@@ -63,11 +75,37 @@ class NN:
 			print 'test mean loss={}, accuracy={}'.format(sum_loss/N_test, sum_accuracy/N_test)
 
 if __name__ == '__main__':
+	parser = argparse.ArgumentParser(description='MNIST')
+	parser.add_argument('--gpu', '-g', default=-1, type=int,
+						help='GPU ID (negative value indicates CPU)')
+	args = parser.parse_args()
+
 	print 'fetch MNIST dataset'
 	mnist = fetch_mldata('MNIST original')
 	mnist.data   = mnist.data.astype(np.float32)
 	mnist.data  /= 255
 	mnist.target = mnist.target.astype(np.int32)
 
-	nn = NN(data=mnist.data, target=mnist.target)
-	nn.train_and_test()
+
+	if args.gpu >= 0:
+		cuda.init(args.gpu)
+
+	start_time = time.time()
+
+	MLP = MLP(data=mnist.data, target=mnist.target, gpu=args.gpu)
+	MLP.train_and_test()
+
+	end_time = time.time()
+
+	print "time = {} min".format((end_time-start_time)/60.0)
+
+
+
+
+
+
+
+
+
+
+
