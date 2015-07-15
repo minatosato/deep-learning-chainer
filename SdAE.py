@@ -11,8 +11,6 @@ import chainer.functions as F
 
 from dAE import DenoisingAutoEncoder
 
-N = 60000
-N_test = 10000
 
 class SdAE:
 	def __init__(self, rng, data, target, n_inputs=784, n_hidden=[784,784,784], n_outputs=10, gpu=-1):
@@ -29,8 +27,11 @@ class SdAE:
 		self.data = data
 		self.target = target
 
-		self.x_train, self.x_test = np.split(data, [N])
-		self.y_train, self.y_test = np.split(target, [N])
+		self.n_train = int(round(len(data)*0.9))
+		self.n_test = int(len(data) - self.n_train)
+
+		self.x_train, self.x_test = np.split(data, [self.n_train])
+		self.y_train, self.y_test = np.split(target, [self.n_train])
 
 		self.n_inputs = n_inputs
 		self.n_hidden = n_hidden
@@ -45,7 +46,7 @@ class SdAE:
 		self.optimizer = optimizers.Adam()
 		self.optimizer.setup(self.model.collect_parameters())
 
-	def pre_train(self, n_epoch=5):
+	def pre_train(self, n_epoch=5, batchsize=100):
 		first_inputs = self.data
 		
 		# initialize first dAE
@@ -55,7 +56,7 @@ class SdAE:
 										 gpu=self.gpu)
 		# train first dAE
 		print "First dAE training has started!"
-		self.dae1.train_and_test(n_epoch=n_epoch, batchsize=100)
+		self.dae1.train_and_test(n_epoch=n_epoch, batchsize=batchsize)
 		# compute second iputs for second dAE
 		second_inputs = self.dae1.compute_hidden(first_inputs)
 
@@ -68,7 +69,7 @@ class SdAE:
 										 gpu=self.gpu)
 		# train second dAE
 		print "Second dAE training has started!"
-		self.dae2.train_and_test(n_epoch=n_epoch, batchsize=100)
+		self.dae2.train_and_test(n_epoch=n_epoch, batchsize=batchsize)
 		# compute third inputs for third dAE
 		third_inputs = self.dae2.compute_hidden(second_inputs)
 		# initialize third dAE
@@ -81,7 +82,7 @@ class SdAE:
 										 gpu=self.gpu)
 		# train third dAE
 		print "Third dAE training has started!"
-		self.dae3.train_and_test(n_epoch=n_epoch, batchsize=100)
+		self.dae3.train_and_test(n_epoch=n_epoch, batchsize=batchsize)
 
 		# update model parameters
 		self.model.l1 = self.dae1.encoder()
@@ -107,12 +108,14 @@ class SdAE:
 		for epoch in xrange(1, n_epoch+1):
 			print 'fine tuning epoch ', epoch
 
-			perm = self.rng.permutation(N)
+			perm = self.rng.permutation(self.n_train)
 			sum_accuracy = 0
 			sum_loss = 0
-			for i in xrange(0, N, batchsize):
+			for i in xrange(0, self.n_train, batchsize):
 				x_batch = self.x_train[perm[i:i+batchsize]]
 				y_batch = self.y_train[perm[i:i+batchsize]]
+
+				real_batchsize = len(x_batch)
 
 				if self.gpu >= 0:
 					x_batch = cuda.to_gpu(x_batch)
@@ -123,17 +126,19 @@ class SdAE:
 				loss.backward()
 				self.optimizer.update()
 
-				sum_loss += float(cuda.to_cpu(loss.data)) * batchsize
-				sum_accuracy += float(cuda.to_cpu(acc.data)) * batchsize
+				sum_loss += float(cuda.to_cpu(loss.data)) * real_batchsize
+				sum_accuracy += float(cuda.to_cpu(acc.data)) * real_batchsize
 
-			print 'fine tuning train mean loss={}, accuracy={}'.format(sum_loss/N, sum_accuracy/N)
+			print 'fine tuning train mean loss={}, accuracy={}'.format(sum_loss/self.n_train, sum_accuracy/self.n_train)
 
 			# evaluation
 			sum_accuracy = 0
 			sum_loss = 0
-			for i in xrange(0, N_test, batchsize):
+			for i in xrange(0, self.n_test, batchsize):
 				x_batch = self.x_test[i:i+batchsize]
 				y_batch = self.y_test[i:i+batchsize]
+
+				real_batchsize = len(x_batch)
 
 				if self.gpu >= 0:
 					x_batch = cuda.to_gpu(x_batch)
@@ -141,10 +146,10 @@ class SdAE:
 
 				loss, acc = self.forward(x_batch, y_batch, train=False)
 
-				sum_loss += float(cuda.to_cpu(loss.data)) * batchsize
-				sum_accuracy += float(cuda.to_cpu(acc.data)) * batchsize
+				sum_loss += float(cuda.to_cpu(loss.data)) * real_batchsize
+				sum_accuracy += float(cuda.to_cpu(acc.data)) * real_batchsize
 
-			print 'fine tuning test mean loss={}, accuracy={}'.format(sum_loss/N_test, sum_accuracy/N_test)
+			print 'fine tuning test mean loss={}, accuracy={}'.format(sum_loss/self.n_test, sum_accuracy/self.n_test)
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='MNIST')

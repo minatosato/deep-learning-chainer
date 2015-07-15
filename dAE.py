@@ -12,9 +12,6 @@ import chainer.computational_graph as c
 import chainer.functions as F
 
 
-N = 60000
-N_test = 10000
-
 
 class DenoisingAutoEncoder:
 	def __init__(self, rng, data, n_inputs=784, n_hidden=784, corruption_level=0.3, gpu=-1):
@@ -32,7 +29,11 @@ class DenoisingAutoEncoder:
 			self.model.to_gpu()
 
 		self.gpu = gpu
-		self.x_train, self.x_test = np.split(data, [N])
+
+		self.n_train = int(round(len(data)*0.9))
+		self.n_test = int(len(data) - self.n_train)
+
+		self.x_train, self.x_test = np.split(data, [self.n_train])
 		self.optimizer = optimizers.Adam()
 		self.optimizer.setup(self.model.collect_parameters())
 		self.corruption_level = corruption_level
@@ -57,13 +58,16 @@ class DenoisingAutoEncoder:
 		return loss
 
 	def compute_hidden(self, x_data):
+
 		if self.gpu >= 0:
 			x_data = cuda.to_gpu(x_data)
+
 		x = Variable(x_data)
 		h = self.encode(x)
 		return cuda.to_cpu(h.data)
 
 	def predict(self, x_data):
+		
 		if self.gpu >= 0:
 			x_data = cuda.to_gpu(x_data)
 
@@ -99,30 +103,34 @@ class DenoisingAutoEncoder:
 		for epoch in xrange(1, n_epoch+1):
 			print 'epoch', epoch
 
-			perm = self.rng.permutation(N)
+			perm = self.rng.permutation(self.n_train)
 			sum_loss = 0
-			for i in xrange(0, N, batchsize):
+			for i in xrange(0, self.n_train, batchsize):
 				x_batch = self.x_train[perm[i:i+batchsize]]
+
+				real_batchsize = len(x_batch)
 
 				self.optimizer.zero_grads()
 				loss = self.forward(x_batch)
 				loss.backward()
 				self.optimizer.update()
 
-				sum_loss += float(cuda.to_cpu(loss.data)) * batchsize
+				sum_loss += float(cuda.to_cpu(loss.data)) * real_batchsize
 
-			print 'train mean loss={}'.format(sum_loss/N)
+			print 'train mean loss={}'.format(sum_loss/self.n_train)
 
 			# evaluation
 			sum_loss = 0
-			for i in xrange(0, N_test, batchsize):
+			for i in xrange(0, self.n_test, batchsize):
 				x_batch = self.x_test[i:i+batchsize]
+
+				real_batchsize = len(x_batch)
 
 				loss = self.forward(x_batch, train=False)
 
-				sum_loss += float(cuda.to_cpu(loss.data)) * batchsize
+				sum_loss += float(cuda.to_cpu(loss.data)) * real_batchsize
 
-			print 'test mean loss={}'.format(sum_loss/N_test)
+			print 'test mean loss={}'.format(sum_loss/self.n_test)
 
 # 参考: http://qiita.com/kenmatsu4/items/7b8d24d4c5144a686412
 def draw_digit(data):
