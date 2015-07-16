@@ -7,6 +7,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.datasets import fetch_mldata
+from sklearn.cross_validation import train_test_split
 from chainer import cuda, Variable, FunctionSet, optimizers
 import chainer.computational_graph as c
 import chainer.functions as F
@@ -30,10 +31,21 @@ class DenoisingAutoEncoder:
 
 		self.gpu = gpu
 
-		self.n_train = int(round(len(data)*0.9))
-		self.n_test = int(len(data) - self.n_train)
+		# self.n_train = int(round(len(data)*0.9))
+		# self.n_test = int(len(data) - self.n_train)
 
-		self.x_train, self.x_test = np.split(data, [self.n_train])
+		# self.x_train, self.x_test = np.split(data, [self.n_train])
+
+		self.x_train,\
+		self.x_test\
+		= train_test_split(data, test_size=0.1)
+
+		self.n_train = len(self.x_train)
+		self.n_test = len(self.x_test)
+
+
+
+
 		self.optimizer = optimizers.Adam()
 		self.optimizer.setup(self.model.collect_parameters())
 		self.corruption_level = corruption_level
