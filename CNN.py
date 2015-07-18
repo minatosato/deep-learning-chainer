@@ -2,6 +2,8 @@
 
 import argparse
 import time
+import six
+import six.moves.cPickle as pickle
 import numpy as np
 from sklearn.datasets import fetch_mldata
 from sklearn.cross_validation import train_test_split
@@ -9,12 +11,16 @@ from chainer import cuda, Variable, FunctionSet, optimizers
 import chainer.functions as F
 
 class ConvolutionalNN:
-	def __init__(self, data, target, n_hidden=100, n_outputs=10, gpu=-1):
+	def __init__(self, data, target, in_channels=1,
+									 n_hidden=100,
+									 n_outputs=10,
+									 gpu=-1):
 
-		self.model = FunctionSet(conv1=	F.Convolution2D(1, 8, 5),
-								 conv2=	F.Convolution2D(8, 16, 5),
-								 l3=	F.Linear(144, n_hidden),
+		self.model = FunctionSet(conv1=	F.Convolution2D(in_channels, 32, 5),
+								 conv2=	F.Convolution2D(32, 32, 5),
+								 l3=	F.Linear(288, n_hidden),
 								 l4=	F.Linear(n_hidden, n_outputs))
+
 		if gpu >= 0:
 			self.model.to_gpu()
 
@@ -84,11 +90,22 @@ class ConvolutionalNN:
 
 			print 'test mean loss={}, accuracy={}'.format(sum_loss/self.n_test, sum_accuracy/self.n_test)
 
+	def dump_model(self):
+		pickle.dump(self.model, open('cnn_model', 'wb'), -1)
+
+	def load_model(self):
+		self.model = pickle.load(open('cnn_model','rb'))
+		self.optimizer.setup(self.model.collect_parameters())
+
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='MNIST')
 	parser.add_argument('--gpu', '-g', default=-1, type=int,
 						help='GPU ID (negative value indicates CPU)')
 	args = parser.parse_args()
+
+	if args.gpu >= 0:
+		cuda.init(args.gpu)
+
 
 	print 'fetch MNIST dataset'
 	mnist = fetch_mldata('MNIST original')
@@ -96,15 +113,27 @@ if __name__ == '__main__':
 	mnist.data  /= 255
 	mnist.data = mnist.data.reshape(70000,1,28,28)
 	mnist.target = mnist.target.astype(np.int32)
+	data = mnist.data
+	target = mnist.target
+	n_outputs = 10
+	in_channels = 1
 
-	if args.gpu >= 0:
-		cuda.init(args.gpu)
+	# from animeface import AnimeFaceDataset
+	# print 'load AnimeFace dataset'
+	# dataset = AnimeFaceDataset()
+	# data = dataset.data
+	# target = dataset.target
+	# n_outputs = dataset.get_n_types_target()
+	# in_channels = 3
 
-	start_time = time.time()
-
-	CNN = ConvolutionalNN(data=mnist.data, target=mnist.target, gpu=args.gpu)
-	CNN.train_and_test()
-
+	cnn = ConvolutionalNN(data=data,
+						  target=target,
+						  gpu=args.gpu,
+						  in_channels=in_channels,
+						  n_outputs=n_outputs,
+						  n_hidden=512)
+	cnn.train_and_test(n_epoch=100)
+	cnn.dump_model()
 
 	end_time = time.time()
 
