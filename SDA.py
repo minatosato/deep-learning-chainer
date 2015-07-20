@@ -10,10 +10,10 @@ from sklearn.cross_validation import train_test_split
 from chainer import cuda, Variable, FunctionSet, optimizers
 import chainer.functions as F
 
-from dAE import DenoisingAutoEncoder
+from DA import DA
 
 
-class SdAE:
+class SDA:
 	def __init__(self, rng, data, target, n_inputs=784, n_hidden=[784,784,784], n_outputs=10, gpu=-1):
 		self.model = FunctionSet(l1=F.Linear(n_inputs, n_hidden[0]),
 								 l2=F.Linear(n_hidden[0], n_hidden[1]),
@@ -53,10 +53,10 @@ class SdAE:
 		first_inputs = self.data
 		
 		# initialize first dAE
-		self.dae1 = DenoisingAutoEncoder(self.rng, first_inputs,
-										 n_inputs=self.n_inputs,
-										 n_hidden=self.n_hidden[0],
-										 gpu=self.gpu)
+		self.dae1 = DA(self.rng, first_inputs,
+					   n_inputs=self.n_inputs,
+					   n_hidden=self.n_hidden[0],
+					   gpu=self.gpu)
 		# train first dAE
 		print "First dAE training has started!"
 		self.dae1.train_and_test(n_epoch=n_epoch, batchsize=batchsize)
@@ -66,10 +66,10 @@ class SdAE:
 
 
 		# initialize second dAE
-		self.dae2 = DenoisingAutoEncoder(self.rng, second_inputs,
-										 n_inputs=self.n_hidden[0],
-										 n_hidden=self.n_hidden[1],
-										 gpu=self.gpu)
+		self.dae2 = DA(self.rng, second_inputs,
+					   n_inputs=self.n_hidden[0],
+					   n_hidden=self.n_hidden[1],
+					   gpu=self.gpu)
 		# train second dAE
 		print "Second dAE training has started!"
 		self.dae2.train_and_test(n_epoch=n_epoch, batchsize=batchsize)
@@ -79,10 +79,10 @@ class SdAE:
 
 
 
-		self.dae3 = DenoisingAutoEncoder(self.rng, third_inputs,
-										 n_inputs=self.n_hidden[1],
-										 n_hidden=self.n_hidden[2],
-										 gpu=self.gpu)
+		self.dae3 = DA(self.rng, third_inputs,
+					   n_inputs=self.n_hidden[1],
+					   n_hidden=self.n_hidden[2],
+					   gpu=self.gpu)
 		# train third dAE
 		print "Third dAE training has started!"
 		self.dae3.train_and_test(n_epoch=n_epoch, batchsize=batchsize)
@@ -173,9 +173,9 @@ if __name__ == '__main__':
 
 	start_time = time.time()
 
-	SDA = SdAE(rng=rng, data=mnist.data, target=mnist.target, gpu=args.gpu)
-	SDA.pre_train(n_epoch=10)
-	SDA.fine_tune(n_epoch=20)
+	sda = SDA(rng=rng, data=mnist.data, target=mnist.target, gpu=args.gpu)
+	sda.pre_train(n_epoch=10)
+	sda.fine_tune(n_epoch=20)
 
 	end_time = time.time()
 

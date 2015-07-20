@@ -14,9 +14,9 @@ import chainer.functions as F
 
 
 
-class DenoisingAutoEncoder:
+class DA:
 	def __init__(self, rng, data, n_inputs=784, n_hidden=784, corruption_level=0.3, gpu=-1):
-		"""DenoisingAutoEncoder
+		"""Denoising AutoEncoder
 		data: data for train
 		n_inputs: a number of units of input layer and output layer
 		n_hidden: a number of units of hidden layer
@@ -198,20 +198,20 @@ if __name__ == '__main__':
 
 
 
-	dAE = DenoisingAutoEncoder(rng=rng,data=mnist.data, gpu=gpu)
+	da = DA(rng=rng, data=mnist.data, gpu=gpu)
 
 	perm = np.random.permutation(N)
 	data = mnist.data[perm[0:9]]
 
 	draw_digits(data, fname="input.png")
 
-	dAE.train_and_test(n_epoch=5)
+	da.train_and_test(n_epoch=5)
 
-	predicted = dAE.predict(data)
+	predicted = da.predict(data)
 	draw_digits(predicted, fname="output_epoch5.png")
 
 	perm = np.random.permutation(784)
-	W = dAE.model.to_cpu().encoder.W[perm[0:9]]
+	W = da.model.to_cpu().encoder.W[perm[0:9]]
 	draw_digits(W, fname="learned_weights.png")
 
 
