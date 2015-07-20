@@ -18,7 +18,7 @@ class ConvolutionalNN:
 
 		self.model = FunctionSet(conv1=	F.Convolution2D(in_channels, 32, 5),
 								 conv2=	F.Convolution2D(32, 32, 5),
-								 l3=	F.Linear(288, n_hidden),
+								 l3=	F.Linear(512, n_hidden),
 								 l4=	F.Linear(n_hidden, n_outputs))
 
 		if gpu >= 0:
@@ -50,6 +50,18 @@ class ConvolutionalNN:
 		y = self.model.l4(h)
 		return F.softmax_cross_entropy(y, t), F.accuracy(y,t)
 
+	def predict(self, x_data):
+
+		if self.gpu >= 0:
+			x_data = cuda.to_gpu(x_data)
+
+		x = Variable(x_data)
+		h = F.max_pooling_2d(F.relu(self.model.conv1(x)), ksize=2, stride=2)
+		h = F.max_pooling_2d(F.relu(self.model.conv2(h)), ksize=3, stride=3)
+		h = F.relu(self.model.l3(h))
+		y = self.model.l4(h)
+		s = F.softmax(y)
+		return s.data
 
 	def train_and_test(self, n_epoch=20, batchsize=100):
 		for epoch in xrange(1, n_epoch+1):
@@ -91,10 +103,13 @@ class ConvolutionalNN:
 			print 'test mean loss={}, accuracy={}'.format(sum_loss/self.n_test, sum_accuracy/self.n_test)
 
 	def dump_model(self):
+		self.model.to_cpu()
 		pickle.dump(self.model, open('cnn_model', 'wb'), -1)
 
 	def load_model(self):
 		self.model = pickle.load(open('cnn_model','rb'))
+		if self.gpu >= 0:
+			self.model.to_gpu()
 		self.optimizer.setup(self.model.collect_parameters())
 
 if __name__ == '__main__':
@@ -108,23 +123,27 @@ if __name__ == '__main__':
 
 
 	print 'fetch MNIST dataset'
-	mnist = fetch_mldata('MNIST original')
-	mnist.data   = mnist.data.astype(np.float32)
-	mnist.data  /= 255
-	mnist.data = mnist.data.reshape(70000,1,28,28)
-	mnist.target = mnist.target.astype(np.int32)
-	data = mnist.data
-	target = mnist.target
-	n_outputs = 10
-	in_channels = 1
+	# mnist = fetch_mldata('MNIST original')
+	# mnist.data   = mnist.data.astype(np.float32)
+	# mnist.data  /= 255
+	# mnist.data = mnist.data.reshape(70000,1,28,28)
+	# mnist.target = mnist.target.astype(np.int32)
+	# data = mnist.data
+	# target = mnist.target
+	# n_outputs = 10
+	# in_channels = 1
 
-	# from animeface import AnimeFaceDataset
-	# print 'load AnimeFace dataset'
-	# dataset = AnimeFaceDataset()
-	# data = dataset.data
-	# target = dataset.target
-	# n_outputs = dataset.get_n_types_target()
-	# in_channels = 3
+	from animeface import AnimeFaceDataset
+	print 'load AnimeFace dataset'
+	dataset = AnimeFaceDataset()
+	dataset.read_data_target()
+	data = dataset.data
+	target = dataset.target
+	n_outputs = dataset.get_n_types_target()
+	in_channels = 3
+
+
+	start_time = time.time()
 
 	cnn = ConvolutionalNN(data=data,
 						  target=target,
@@ -132,8 +151,35 @@ if __name__ == '__main__':
 						  in_channels=in_channels,
 						  n_outputs=n_outputs,
 						  n_hidden=512)
-	cnn.train_and_test(n_epoch=100)
-	cnn.dump_model()
+	# cnn.train_and_test(n_epoch=10)
+	# cnn.dump_model()
+
+	cnn.load_model()
+
+	while True:
+		_input = raw_input()
+		_input = _input[0:len(_input)-1]
+		import cv2 as cv
+		image = cv.imread(_input)
+		image = cv.resize(image, (dataset.image_size, dataset.image_size))
+		image = image.transpose(2,0,1)
+		image = image/255.
+		tmp = []
+		tmp.append(image)
+		data = np.array(tmp, np.float32)
+		target = int(dataset.get_class_id(_input))
+		predicted = cnn.predict(data)[0]
+		rank = {}
+		for i in xrange(len(predicted)):
+			rank[dataset.index2name[i]] = predicted[i]
+		rank = sorted(rank.items(),key=lambda x:x[1],reverse=True)
+		for i in range(9):
+			r = rank[i]
+			print "#" + str(i+1) + '  ' + r[0] + '  ' + str(r[1]*100) + '%'
+		print '#########################################'
+
+
+
 
 	end_time = time.time()
 
