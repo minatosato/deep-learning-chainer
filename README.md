@@ -1,7 +1,11 @@
 #Deep Leaning
 This is an implementation of Deep Leaning by [Chainer](http://chainer.org).  
 
-Running following codes, they learn and test the MNIST.
+Running following codes, they learn and test the MNIST.  
+e.g.,  
+python CNN.py  
+IF you want to use CUDA,  
+python CNN.py --gpu=0  
 
 NN.py: a simple Multi-layer Perceptron.  
 CNN.py: Convolutional Neural Network.  
