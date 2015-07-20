@@ -77,12 +77,18 @@ class CNN:
 
 
 	def train_and_test(self, n_epoch=20, batchsize=100):
-		for epoch in xrange(1, n_epoch+1):
+		# for early stpping (patience approach [Bengio, 2012]) params
+		patience = 20
+		iteration = 1
+
+		epoch = 1
+		best_accuracy = 0
+		while epoch <= n_epoch and iteration < patience:
 			print 'epoch', epoch
 
 			perm = np.random.permutation(self.n_train)
-			sum_accuracy = 0
-			sum_loss = 0
+			sum_train_accuracy = 0
+			sum_train_loss = 0
 			for i in xrange(0, self.n_train, batchsize):
 				x_batch = self.x_train[perm[i:i+batchsize]]
 				y_batch = self.y_train[perm[i:i+batchsize]]
@@ -94,14 +100,14 @@ class CNN:
 				loss.backward()
 				self.optimizer.update()
 
-				sum_loss += float(cuda.to_cpu(loss.data)) * real_batchsize
-				sum_accuracy += float(cuda.to_cpu(acc.data)) * real_batchsize
+				sum_train_loss += float(cuda.to_cpu(loss.data)) * real_batchsize
+				sum_train_accuracy += float(cuda.to_cpu(acc.data)) * real_batchsize
 
-			print 'train mean loss={}, accuracy={}'.format(sum_loss/self.n_train, sum_accuracy/self.n_train)
+			print 'train mean loss={}, accuracy={}'.format(sum_train_loss/self.n_train, sum_train_accuracy/self.n_train)
 
 			# evalation
-			sum_accuracy = 0
-			sum_loss = 0
+			sum_test_accuracy = 0
+			sum_test_loss = 0
 			for i in xrange(0, self.n_test, batchsize):
 				x_batch = self.x_test[i:i+batchsize]
 				y_batch = self.y_test[i:i+batchsize]
@@ -110,10 +116,25 @@ class CNN:
 
 				loss, acc = self.model.forward(x_batch, y_batch, train=False, gpu=self.gpu)
 
-				sum_loss += float(cuda.to_cpu(loss.data)) * real_batchsize
-				sum_accuracy += float(cuda.to_cpu(acc.data)) * real_batchsize
+				sum_test_loss += float(cuda.to_cpu(loss.data)) * real_batchsize
+				sum_test_accuracy += float(cuda.to_cpu(acc.data)) * real_batchsize
 
-			print 'test mean loss={}, accuracy={}'.format(sum_loss/self.n_test, sum_accuracy/self.n_test)
+			print 'test mean loss={}, accuracy={}'.format(sum_test_loss/self.n_test, sum_test_accuracy/self.n_test)
+
+			# patience approach early stopping [Bengio, 2012]
+			# if the performance improves
+			if sum_test_accuracy > best_accuracy:
+				patience = max(patience, iteration*2)
+			iteration += 1
+			best_accuracy = max(best_accuracy, sum_test_accuracy)
+			
+
+			epoch += 1
+
+		if epoch < n_epoch:
+			print 'Early Stopping is now executed!'
+		else:
+			print 'Early Stopping was not executed.'
 
 	def dump_model(self):
 		self.model.to_cpu()
