@@ -15,7 +15,7 @@ import chainer.functions as F
 
 class ImageNet(FunctionSet):
 	def __init__(self, in_channels=1, n_hidden=100, n_outputs=10):
-		super(CNN, self).__init__(
+		super(ImageNet, self).__init__(
 			conv1=	F.Convolution2D(in_channels, 32, 5),
 			conv2=	F.Convolution2D(32, 32, 5),
 			l3=		F.Linear(288, n_hidden),
@@ -165,7 +165,7 @@ if __name__ == '__main__':
 			  n_outputs=n_outputs,
 			  n_hidden=100)
 	cnn.train_and_test(n_epoch=10)
-	# cnn.dump_model()
+	cnn.dump_model()
 
 	# cnn.load_model()
 
