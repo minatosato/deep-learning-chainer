@@ -19,10 +19,8 @@ class MLP:
 		if gpu >= 0:
 			self.model.to_gpu()
 
-		self.x_train,\
-		self.x_test,\
-		self.y_train,\
-		self.y_test = train_test_split(data, target, test_size=0.1)
+		self.x_train, self.x_test = data
+		self.y_train, self.y_test = target
 
 		self.n_train = len(self.y_train)
 		self.n_test = len(self.y_test)
@@ -94,13 +92,20 @@ if __name__ == '__main__':
 	mnist.data  /= 255
 	mnist.target = mnist.target.astype(np.int32)
 
+	data_train,\
+	data_test,\
+	target_train,\
+	target_test = train_test_split(mnist.data, mnist.target)
+
+	data = [data_train, data_test]
+	target = [target_train, target_test]
 
 	if args.gpu >= 0:
 		cuda.init(args.gpu)
 
 	start_time = time.time()
 
-	MLP = MLP(data=mnist.data, target=mnist.target, gpu=args.gpu)
+	MLP = MLP(data=data, target=target, gpu=args.gpu)
 	MLP.train_and_test()
 
 	end_time = time.time()
