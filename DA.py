@@ -31,20 +31,10 @@ class DA:
 
 		self.gpu = gpu
 
-		# self.n_train = int(round(len(data)*0.9))
-		# self.n_test = int(len(data) - self.n_train)
-
-		# self.x_train, self.x_test = np.split(data, [self.n_train])
-
-		self.x_train,\
-		self.x_test\
-		= train_test_split(data, test_size=0.1)
+		self.x_train, self.x_test = data
 
 		self.n_train = len(self.x_train)
 		self.n_test = len(self.x_test)
-
-
-
 
 		self.optimizer = optimizers.Adam()
 		self.optimizer.setup(self.model.collect_parameters())

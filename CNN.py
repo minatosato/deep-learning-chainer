@@ -64,10 +64,8 @@ class CNN:
 
 		self.gpu = gpu
 
-		self.x_train,\
-		self.x_test,\
-		self.y_train,\
-		self.y_test = train_test_split(data, target, test_size=0.1)
+		self.x_train, self.x_test = data
+		self.y_train, self.y_test = target
 
 		self.n_train = len(self.y_train)
 		self.n_test = len(self.y_test)
@@ -162,8 +160,15 @@ if __name__ == '__main__':
 	mnist.data  /= 255
 	mnist.data = mnist.data.reshape(70000,1,28,28)
 	mnist.target = mnist.target.astype(np.int32)
-	data = mnist.data
-	target = mnist.target
+
+	data_train,\
+	data_test,\
+	target_train,\
+	target_test = train_test_split(mnist.data, mnist.target)
+
+	data = [data_train, data_test]
+	target = [target_train, target_test]
+
 	n_outputs = 10
 	in_channels = 1
 

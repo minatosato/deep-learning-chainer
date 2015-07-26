@@ -6,7 +6,7 @@ e.g.,
 ```
 python CNN.py 
 ```
-IF you want to use CUDA,  
+If you want to use CUDA,  
 ```
 python CNN.py --gpu=0  
 ```

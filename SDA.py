@@ -14,7 +14,8 @@ from DA import DA
 
 
 class SDA:
-	def __init__(self, rng, data, target, n_inputs=784, n_hidden=[784,784,784], n_outputs=10, gpu=-1):
+	def __init__(self, rng, data, target, n_inputs=784,	n_hidden=[784,784,784],	n_outputs=10, gpu=-1):
+
 		self.model = FunctionSet(l1=F.Linear(n_inputs, n_hidden[0]),
 								 l2=F.Linear(n_hidden[0], n_hidden[1]),
 								 l3=F.Linear(n_hidden[1], n_hidden[2]),
@@ -28,10 +29,8 @@ class SDA:
 		self.data = data
 		self.target = target
 
-		self.x_train,\
-		self.x_test,\
-		self.y_train,\
-		self.y_test = train_test_split(data, target, test_size=0.1)
+		self.x_train, self.x_test = data
+		self.y_train, self.y_test = target
 
 		self.n_train = len(self.y_train)
 		self.n_test = len(self.y_test)
@@ -49,42 +48,50 @@ class SDA:
 		self.optimizer = optimizers.Adam()
 		self.optimizer.setup(self.model.collect_parameters())
 
-	def pre_train(self, n_epoch=5, batchsize=100):
+	def pre_train(self, n_epoch=20, batchsize=100):
 		first_inputs = self.data
 		
 		# initialize first dAE
-		self.dae1 = DA(self.rng, first_inputs,
+		self.dae1 = DA(self.rng,
+					   data=first_inputs,
 					   n_inputs=self.n_inputs,
 					   n_hidden=self.n_hidden[0],
 					   gpu=self.gpu)
 		# train first dAE
-		print "First dAE training has started!"
+		print "--------First DA training has started!--------"
 		self.dae1.train_and_test(n_epoch=n_epoch, batchsize=batchsize)
 		# compute second iputs for second dAE
-		second_inputs = self.dae1.compute_hidden(first_inputs)
+		tmp1 = self.dae1.compute_hidden(first_inputs[0])
+		tmp2 = self.dae1.compute_hidden(first_inputs[1])
+		second_inputs = [tmp1, tmp2]
 
 
 
 		# initialize second dAE
-		self.dae2 = DA(self.rng, second_inputs,
+		self.dae2 = DA(self.rng,
+					   data=second_inputs,
 					   n_inputs=self.n_hidden[0],
 					   n_hidden=self.n_hidden[1],
 					   gpu=self.gpu)
 		# train second dAE
-		print "Second dAE training has started!"
+		print "--------Second DA training has started!--------"
 		self.dae2.train_and_test(n_epoch=n_epoch, batchsize=batchsize)
 		# compute third inputs for third dAE
-		third_inputs = self.dae2.compute_hidden(second_inputs)
+		tmp1 = self.dae2.compute_hidden(second_inputs[0])
+		tmp2 = self.dae2.compute_hidden(second_inputs[1])
+		third_inputs = [tmp1, tmp2]
+
+
+
+
 		# initialize third dAE
-
-
-
-		self.dae3 = DA(self.rng, third_inputs,
+		self.dae3 = DA(self.rng,
+					   data=third_inputs,
 					   n_inputs=self.n_hidden[1],
 					   n_hidden=self.n_hidden[2],
 					   gpu=self.gpu)
 		# train third dAE
-		print "Third dAE training has started!"
+		print "--------Third DA training has started!--------"
 		self.dae3.train_and_test(n_epoch=n_epoch, batchsize=batchsize)
 
 		# update model parameters
@@ -166,6 +173,14 @@ if __name__ == '__main__':
 	mnist.data  /= 255
 	mnist.target = mnist.target.astype(np.int32)
 
+	data_train,\
+	data_test,\
+	target_train,\
+	target_test = train_test_split(mnist.data, mnist.target)
+
+	data = [data_train, data_test]
+	target = [target_train, target_test]
+
 	rng = np.random.RandomState(1)
 	
 	if args.gpu >= 0:
@@ -173,7 +188,10 @@ if __name__ == '__main__':
 
 	start_time = time.time()
 
-	sda = SDA(rng=rng, data=mnist.data, target=mnist.target, gpu=args.gpu)
+	sda = SDA(rng=rng,
+			  data=data,
+			  target=target,
+			  gpu=args.gpu)
 	sda.pre_train(n_epoch=10)
 	sda.fine_tune(n_epoch=20)
 
