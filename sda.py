@@ -10,11 +10,20 @@ from sklearn.cross_validation import train_test_split
 from chainer import cuda, Variable, FunctionSet, optimizers
 import chainer.functions as F
 
-from DA import DA
+from da import DA
 
 
 class SDA:
-	def __init__(self, rng, data, target, n_inputs=784,	n_hidden=[784,784,784],	n_outputs=10, gpu=-1):
+	def __init__(
+		self,
+		rng,
+		data,
+		target,
+		n_inputs=784,
+		n_hidden=[784,784,784],
+		n_outputs=10,
+		corruption_levels=[0.1,0.2,0.3],
+		gpu=-1):
 
 		self.model = FunctionSet(l1=F.Linear(n_inputs, n_hidden[0]),
 								 l2=F.Linear(n_hidden[0], n_hidden[1]),
@@ -23,6 +32,9 @@ class SDA:
 
 		if gpu >= 0:
 			self.model.to_gpu()
+			self.xp = cuda.cupy
+		else:
+			self.xp = np
 
 		self.rng = rng
 		self.gpu = gpu
@@ -35,6 +47,7 @@ class SDA:
 		self.n_train = len(self.y_train)
 		self.n_test = len(self.y_test)
 
+		self.corruption_levels = corruption_levels
 		self.n_inputs = n_inputs
 		self.n_hidden = n_hidden
 		self.n_outputs = n_outputs
@@ -43,10 +56,11 @@ class SDA:
 		self.dae2 = None
 		self.dae3 = None
 		self.optimizer = None
+		self.setup_optimizer()
 	
 	def setup_optimizer(self):
-		self.optimizer = optimizers.Adam()
-		self.optimizer.setup(self.model.collect_parameters())
+		self.optimizer = optimizers.AdaDelta()
+		self.optimizer.setup(self.model)
 
 	def pre_train(self, n_epoch=20, batchsize=100):
 		first_inputs = self.data
@@ -56,15 +70,18 @@ class SDA:
 					   data=first_inputs,
 					   n_inputs=self.n_inputs,
 					   n_hidden=self.n_hidden[0],
+					   corruption_level=self.corruption_levels[0],
 					   gpu=self.gpu)
 		# train first dAE
 		print "--------First DA training has started!--------"
 		self.dae1.train_and_test(n_epoch=n_epoch, batchsize=batchsize)
+		self.dae1.to_cpu()
 		# compute second iputs for second dAE
 		tmp1 = self.dae1.compute_hidden(first_inputs[0])
 		tmp2 = self.dae1.compute_hidden(first_inputs[1])
+		if self.gpu >= 0:
+			self.dae1.to_gpu()
 		second_inputs = [tmp1, tmp2]
-
 
 
 		# initialize second dAE
@@ -72,15 +89,18 @@ class SDA:
 					   data=second_inputs,
 					   n_inputs=self.n_hidden[0],
 					   n_hidden=self.n_hidden[1],
+					   corruption_level=self.corruption_levels[1],
 					   gpu=self.gpu)
 		# train second dAE
 		print "--------Second DA training has started!--------"
 		self.dae2.train_and_test(n_epoch=n_epoch, batchsize=batchsize)
+		self.dae2.to_cpu()
 		# compute third inputs for third dAE
 		tmp1 = self.dae2.compute_hidden(second_inputs[0])
 		tmp2 = self.dae2.compute_hidden(second_inputs[1])
+		if self.gpu >= 0:
+			self.dae2.to_gpu()
 		third_inputs = [tmp1, tmp2]
-
 
 
 
@@ -89,6 +109,7 @@ class SDA:
 					   data=third_inputs,
 					   n_inputs=self.n_hidden[1],
 					   n_hidden=self.n_hidden[2],
+					   corruption_level=self.corruption_levels[2],
 					   gpu=self.gpu)
 		# train third dAE
 		print "--------Third DA training has started!--------"
@@ -102,11 +123,6 @@ class SDA:
 		self.setup_optimizer()
 
 	def forward(self, x_data, y_data, train=True):
-		
-		if self.gpu >= 0:
-			x_data = cuda.to_gpu(x_data)
-			y_data = cuda.to_gpu(y_data)
-
 		x, t = Variable(x_data), Variable(y_data)
 		h1 = F.dropout(F.relu(self.model.l1(x)), train=train)
 		h2 = F.dropout(F.relu(self.model.l2(h1)), train=train)
@@ -115,6 +131,9 @@ class SDA:
 		return F.softmax_cross_entropy(y, t), F.accuracy(y, t)
 
 	def fine_tune(self, n_epoch=20, batchsize=100):
+		train_accs = []
+		test_accs = []
+
 		for epoch in xrange(1, n_epoch+1):
 			print 'fine tuning epoch ', epoch
 
@@ -122,14 +141,10 @@ class SDA:
 			sum_accuracy = 0
 			sum_loss = 0
 			for i in xrange(0, self.n_train, batchsize):
-				x_batch = self.x_train[perm[i:i+batchsize]]
-				y_batch = self.y_train[perm[i:i+batchsize]]
+				x_batch = self.xp.asarray(self.x_train[perm[i:i+batchsize]])
+				y_batch = self.xp.asarray(self.y_train[perm[i:i+batchsize]])
 
 				real_batchsize = len(x_batch)
-
-				if self.gpu >= 0:
-					x_batch = cuda.to_gpu(x_batch)
-					y_batch = cuda.to_gpu(y_batch)
 
 				self.optimizer.zero_grads()
 				loss, acc = self.forward(x_batch, y_batch)
@@ -140,19 +155,16 @@ class SDA:
 				sum_accuracy += float(cuda.to_cpu(acc.data)) * real_batchsize
 
 			print 'fine tuning train mean loss={}, accuracy={}'.format(sum_loss/self.n_train, sum_accuracy/self.n_train)
+			train_accs.append(sum_accuracy/self.n_train)
 
 			# evaluation
 			sum_accuracy = 0
 			sum_loss = 0
 			for i in xrange(0, self.n_test, batchsize):
-				x_batch = self.x_test[i:i+batchsize]
-				y_batch = self.y_test[i:i+batchsize]
+				x_batch = self.xp.asarray(self.x_test[i:i+batchsize])
+				y_batch = self.xp.asarray(self.y_test[i:i+batchsize])
 
 				real_batchsize = len(x_batch)
-
-				if self.gpu >= 0:
-					x_batch = cuda.to_gpu(x_batch)
-					y_batch = cuda.to_gpu(y_batch)
 
 				loss, acc = self.forward(x_batch, y_batch, train=False)
 
@@ -160,6 +172,8 @@ class SDA:
 				sum_accuracy += float(cuda.to_cpu(acc.data)) * real_batchsize
 
 			print 'fine tuning test mean loss={}, accuracy={}'.format(sum_loss/self.n_test, sum_accuracy/self.n_test)
+			test_accs.append(sum_accuracy/self.n_test)
+		return train_accs, test_accs
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='MNIST')
@@ -184,7 +198,8 @@ if __name__ == '__main__':
 	rng = np.random.RandomState(1)
 	
 	if args.gpu >= 0:
-		cuda.init(args.gpu)
+		cuda.check_cuda_available()
+		cuda.get_device(args.gpu).use()
 
 	start_time = time.time()
 
@@ -192,7 +207,7 @@ if __name__ == '__main__':
 			  data=data,
 			  target=target,
 			  gpu=args.gpu)
-	sda.pre_train(n_epoch=10)
+	# sda.pre_train(n_epoch=15)
 	sda.fine_tune(n_epoch=20)
 
 	end_time = time.time()

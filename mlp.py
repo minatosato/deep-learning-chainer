@@ -18,6 +18,9 @@ class MLP:
 
 		if gpu >= 0:
 			self.model.to_gpu()
+			self.xp = cuda.cupy
+		else:
+			self.xp = np
 
 		self.x_train, self.x_test = data
 		self.y_train, self.y_test = target
@@ -27,17 +30,13 @@ class MLP:
 		
 		self.gpu = gpu
 		self.optimizer = optimizers.Adam()
-		self.optimizer.setup(self.model.collect_parameters())
+		self.optimizer.setup(self.model)
 
 	def forward(self, x_data, y_data, train=True):
-
-		if self.gpu >= 0:
-			x_data = cuda.to_gpu(x_data)
-			y_data = cuda.to_gpu(y_data)
-
 		x, t = Variable(x_data), Variable(y_data)
-		h = F.dropout(F.sigmoid(self.model.l1(x)), train=train)
-		y = self.model.l2(h)
+		h1 = F.dropout(F.relu(self.model.l1(x)), train=train)
+		h2 = F.dropout(F.relu(self.model.l2(h1)), train=train)
+		y = self.model.l3(h2)
 		return F.softmax_cross_entropy(y, t), F.accuracy(y,t)
 
 
@@ -49,8 +48,8 @@ class MLP:
 			sum_accuracy = 0
 			sum_loss = 0
 			for i in xrange(0, self.n_train, batchsize):
-				x_batch = self.x_train[perm[i:i+batchsize]]
-				y_batch = self.y_train[perm[i:i+batchsize]]
+				x_batch = self.xp.asarray(self.x_train[perm[i:i+batchsize]])
+				y_batch = self.xp.asarray(self.y_train[perm[i:i+batchsize]])
 
 				real_batchsize = len(x_batch)
 
@@ -68,8 +67,8 @@ class MLP:
 			sum_accuracy = 0
 			sum_loss = 0
 			for i in xrange(0, self.n_test, batchsize):
-				x_batch = self.x_test[i:i+batchsize]
-				y_batch = self.y_test[i:i+batchsize]
+				x_batch = self.xp.asarray(self.x_test[i:i+batchsize])
+				y_batch = self.xp.asarray(self.y_test[i:i+batchsize])
 
 				real_batchsize = len(x_batch)
 
@@ -100,13 +99,15 @@ if __name__ == '__main__':
 	data = [data_train, data_test]
 	target = [target_train, target_test]
 
-	if args.gpu >= 0:
-		cuda.init(args.gpu)
 
 	start_time = time.time()
 
+	if args.gpu >= 0:
+		cuda.check_cuda_available()
+		cuda.get_device(args.gpu).use()
+
 	MLP = MLP(data=data, target=target, gpu=args.gpu)
-	MLP.train_and_test()
+	MLP.train_and_test(n_epoch=1)
 
 	end_time = time.time()
 

@@ -2,8 +2,7 @@
 
 import argparse
 import time
-import six
-import six.moves.cPickle as pickle
+import cPickle as pickle
 import numpy as np
 from sklearn.datasets import fetch_mldata
 from sklearn.cross_validation import train_test_split
@@ -13,9 +12,9 @@ import chainer.functions as F
 # import sys
 # sys.path.append
 
-class ImageNet(FunctionSet):
+class CNNModel(FunctionSet):
 	def __init__(self, in_channels=1, n_hidden=100, n_outputs=10):
-		super(ImageNet, self).__init__(
+		super(CNNModel, self).__init__(
 			conv1=	F.Convolution2D(in_channels, 32, 5),
 			conv2=	F.Convolution2D(32, 32, 5),
 			l3=		F.Linear(288, n_hidden),
@@ -23,11 +22,6 @@ class ImageNet(FunctionSet):
 		)
 
 	def forward(self, x_data, y_data, train=True, gpu=-1):
-
-		if gpu >= 0:
-			x_data = cuda.to_gpu(x_data)
-			y_data = cuda.to_gpu(y_data)
-
 		x, t = Variable(x_data), Variable(y_data)
 		h = F.max_pooling_2d(F.relu(self.conv1(x)), ksize=2, stride=2)
 		h = F.max_pooling_2d(F.relu(self.conv2(h)), ksize=3, stride=3)
@@ -36,10 +30,6 @@ class ImageNet(FunctionSet):
 		return F.softmax_cross_entropy(y, t), F.accuracy(y,t)
 
 	def predict(self, x_data, gpu=-1):
-
-		if gpu >= 0:
-			x_data = cuda.to_gpu(x_data)
-
 		x = Variable(x_data)
 		h = F.max_pooling_2d(F.relu(self.conv1(x)), ksize=2, stride=2)
 		h = F.max_pooling_2d(F.relu(self.conv2(h)), ksize=3, stride=3)
@@ -56,11 +46,14 @@ class CNN:
 									 n_outputs=10,
 									 gpu=-1):
 
-		self.model = ImageNet(in_channels, n_hidden, n_outputs)
+		self.model = CNNModel(in_channels, n_hidden, n_outputs)
 		self.model_name = 'cnn_model'
 
 		if gpu >= 0:
 			self.model.to_gpu()
+			self.xp = cuda.cupy
+		else:
+			self.xp = np
 
 		self.gpu = gpu
 
@@ -71,7 +64,7 @@ class CNN:
 		self.n_test = len(self.y_test)
 
 		self.optimizer = optimizers.Adam()
-		self.optimizer.setup(self.model.collect_parameters())
+		self.optimizer.setup(self.model)
 
 
 	def train_and_test(self, n_epoch=20, batchsize=100):
@@ -88,8 +81,8 @@ class CNN:
 			sum_train_accuracy = 0
 			sum_train_loss = 0
 			for i in xrange(0, self.n_train, batchsize):
-				x_batch = self.x_train[perm[i:i+batchsize]]
-				y_batch = self.y_train[perm[i:i+batchsize]]
+				x_batch = self.xp.asarray(self.x_train[perm[i:i+batchsize]])
+				y_batch = self.xp.asarray(self.y_train[perm[i:i+batchsize]])
 
 				real_batchsize = len(x_batch)
 
@@ -98,8 +91,8 @@ class CNN:
 				loss.backward()
 				self.optimizer.update()
 
-				sum_train_loss += float(cuda.to_cpu(loss.data)) * real_batchsize
-				sum_train_accuracy += float(cuda.to_cpu(acc.data)) * real_batchsize
+				sum_train_loss += float(loss.data) * real_batchsize
+				sum_train_accuracy += float(acc.data) * real_batchsize
 
 			print 'train mean loss={}, accuracy={}'.format(sum_train_loss/self.n_train, sum_train_accuracy/self.n_train)
 
@@ -107,25 +100,17 @@ class CNN:
 			sum_test_accuracy = 0
 			sum_test_loss = 0
 			for i in xrange(0, self.n_test, batchsize):
-				x_batch = self.x_test[i:i+batchsize]
-				y_batch = self.y_test[i:i+batchsize]
+				x_batch = self.xp.asarray(self.x_test[i:i+batchsize])
+				y_batch = self.xp.asarray(self.y_test[i:i+batchsize])
 
 				real_batchsize = len(x_batch)
 
 				loss, acc = self.model.forward(x_batch, y_batch, train=False, gpu=self.gpu)
 
-				sum_test_loss += float(cuda.to_cpu(loss.data)) * real_batchsize
-				sum_test_accuracy += float(cuda.to_cpu(acc.data)) * real_batchsize
+				sum_test_loss += float(loss.data) * real_batchsize
+				sum_test_accuracy += float(acc.data) * real_batchsize
 
 			print 'test mean loss={}, accuracy={}'.format(sum_test_loss/self.n_test, sum_test_accuracy/self.n_test)
-
-			# patience approach early stopping [Bengio, 2012]
-			# if the performance improves
-			if sum_test_accuracy > best_accuracy:
-				patience = max(patience, iteration*2)
-			iteration += 1
-			best_accuracy = max(best_accuracy, sum_test_accuracy)
-			
 
 			epoch += 1
 
@@ -142,7 +127,7 @@ class CNN:
 		self.model = pickle.load(open(self.model_name,'rb'))
 		if self.gpu >= 0:
 			self.model.to_gpu()
-		self.optimizer.setup(self.model.collect_parameters())
+		self.optimizer.setup(self.model)
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='MNIST')
@@ -151,7 +136,8 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 
 	if args.gpu >= 0:
-		cuda.init(args.gpu)
+		cuda.check_cuda_available()
+		cuda.get_device(args.gpu).use()
 
 
 	print 'fetch MNIST dataset'
