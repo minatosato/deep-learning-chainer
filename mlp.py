@@ -105,6 +105,9 @@ if __name__ == '__main__':
 	if args.gpu >= 0:
 		cuda.check_cuda_available()
 		cuda.get_device(args.gpu).use()
+		print "Using gpu device 0: GeForce GT 620"
+	else:
+		print "Not using gpu device"
 
 	MLP = MLP(data=data, target=target, gpu=args.gpu)
 	MLP.train_and_test(n_epoch=1)

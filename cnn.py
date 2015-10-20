@@ -47,7 +47,7 @@ class CNN:
 									 gpu=-1):
 
 		self.model = CNNModel(in_channels, n_hidden, n_outputs)
-		self.model_name = 'cnn_model'
+		self.model_name = 'cnn.model'
 
 		if gpu >= 0:
 			self.model.to_gpu()
@@ -68,13 +68,8 @@ class CNN:
 
 
 	def train_and_test(self, n_epoch=20, batchsize=100):
-		# for early stpping (patience approach [Bengio, 2012]) params
-		patience = 20
-		iteration = 1
-
 		epoch = 1
-		best_accuracy = 0
-		while epoch <= n_epoch and iteration < patience:
+		while epoch <= n_epoch:
 			print 'epoch', epoch
 
 			perm = np.random.permutation(self.n_train)
@@ -113,11 +108,6 @@ class CNN:
 			print 'test mean loss={}, accuracy={}'.format(sum_test_loss/self.n_test, sum_test_accuracy/self.n_test)
 
 			epoch += 1
-
-		if epoch < n_epoch:
-			print 'Early Stopping is now executed!'
-		else:
-			print 'Early Stopping was not executed.'
 
 	def dump_model(self):
 		self.model.to_cpu()
